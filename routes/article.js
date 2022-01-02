@@ -12,7 +12,8 @@ function FindArticleByID(id){
 }
 function FindArticleByKeyword(keyword){
     //模糊查找
-    let sql = `select * from article where title LIKE '%${keyword}%' AND content LIKE '%${keyword}%'`
+    let sql = `select * from article where title LIKE '%${keyword}%' OR content LIKE '%${keyword}%'`
+    console.log(sql)
     return Mysql_Services.query(sql)
 }
 function InsertArticle(title,content,uid){
@@ -21,6 +22,32 @@ function InsertArticle(title,content,uid){
     console.log(sql)
     return Mysql_Services.query(sql)
 }
+async function ReciveByID(id,rid){
+    let sql = `select recive from article where id=${id}`
+    let article = await Mysql_Services.query(sql)
+    console.log(article[0].recive)
+    if(article[0].recive != null){
+        let uid = article[0].recive.split(",")
+        let flag = false
+        for(let x of uid){
+            if(x == null || x == ""){
+                break
+            }
+            //如果有跟id相同的，不允许插入
+            if(rid == x){
+                flag = true
+            }
+        }
+        if(flag)    throw "已收到过"
+        sql = `update article set recive="${article[0].recive}${rid}," where id = ${id}`
+    }else{
+        sql = `update article set recive="${rid}," where id = ${id}`
+    }
+    console.log(sql)
+    return await Mysql_Services.query(sql)
+}
+
+
 FindErrMsg = {
     'code':500,
     'msg':'查询出错，请稍后再试'
@@ -40,17 +67,19 @@ router.get('/',async (ctx,next)=>{
 })
 router.get('/id/:id',async (ctx,next)=>{
     try{
-        let article = await FindArticleByID(ctx.param.id)
+        let article = await FindArticleByID(ctx.params.id)
         ctx.body = article
     }catch{
         ctx.body = FindErrMsg
     }
 })
-router.get('/search/:keyword',async (ctx,next)=>{
+router.get('/search/:search',async (ctx,next)=>{
+    console.log(ctx.params)
     try{
-        let article = await FindArticleByKeyword(ctx.param.keyword)
+        let article = await FindArticleByKeyword(ctx.params.search)
         ctx.body = article
-    }catch{
+    }catch(e){
+        console.log(e)
         ctx.body = FindErrMsg
     }
 })
@@ -97,6 +126,48 @@ router.post('/',async (ctx,next)=>{
         }
     }
 })
-
+router.post('/recive',async (ctx,next)=>{
+    let id = ctx.request.body.id
+    let token = ctx.request.header.token
+    if(id == (null || undefined || "")){
+        //id不正确
+        ctx.body = {
+            'code':500,
+            msg:'非法注入,已记录IP'
+        }
+        return
+    }
+    let jwt_result
+    try{
+        jwt_result = jwt.decode(token,'hyhsb',false)
+    }catch(e){
+        console.log(e)
+        ctx.body = {
+            code:500,
+            msg:'身份过期'
+        }
+    }finally{
+        try{
+            await ReciveByID(id,jwt_result.id)
+            ctx.body = {
+                code:200,
+                msg:'收到成功'
+            }
+        }catch(e){
+            if(typeof e == "string"){
+                ctx.body = {
+                    code:500,
+                    msg:e
+                }
+                return
+            }
+            ctx.body = {
+                code:500,
+                msg:'收到失败',
+            }
+        }
+        
+    }
+})
 
 module.exports = router
