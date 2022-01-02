@@ -1,7 +1,8 @@
 const router = require('koa-router')()
 const Mysql_Services = require('../utils/mysql')
 const jwt = require('jwt-simple')
-
+const Check = require('../utils/check')
+const { reject } = require('core-js/fn/promise')
 function ListArticle(){
     let sql = `select * from article`
     return Mysql_Services.query(sql)
@@ -46,7 +47,22 @@ async function ReciveByID(id,rid){
     console.log(sql)
     return await Mysql_Services.query(sql)
 }
-
+async function DelByID(id,uid){
+    let article = await FindArticleByID(id)
+    if(article.length != 1){
+        reject('此文章已不存在')
+        return
+    }
+    article = article[0]
+    if(article.uid != uid){
+        reject('你没有权限删除')
+        return
+    }
+    let sql = `delete from comment where aid=${id}`
+    await Mysql_Services.query(sql)
+    sql = `delete from article where id=${id}`
+    return await Mysql_Services.query(sql)
+}
 
 FindErrMsg = {
     'code':500,
@@ -154,20 +170,48 @@ router.post('/recive',async (ctx,next)=>{
                 msg:'收到成功'
             }
         }catch(e){
-            if(typeof e == "string"){
-                ctx.body = {
-                    code:500,
-                    msg:e
-                }
-                return
-            }
             ctx.body = {
                 code:500,
-                msg:'收到失败',
+                msg:e.message
             }
         }
         
     }
 })
+router.delete('/id/:id',async (ctx,next)=>{
+    let id = ctx.params.id
+    let token = ctx.request.header.token
+    if(!Check.vailid(id,token)){
+        ctx.body = {
+            code:500,
+            msg:'信息不全'
+        }
+        return
+    }let jwt_result
+    try{
+        jwt_result = jwt.decode(token,'hyhsb',false)
+    }catch(e){
+        console.log(e)
+        ctx.body = {
+            code:500,
+            msg:'身份过期'
+        }
+    }finally{
+        try{
+            await DelByID(id,jwt_result.id)
+            ctx.body = {
+                code:200,
+                msg:'删除成功'
+            }
+        }catch(e){
+            ctx.body = {
+                code:500,
+                msg:e.message
+            }
+            return
+        }
+        
+    }
 
+})
 module.exports = router

@@ -7,6 +7,7 @@ const logger = require('koa-logger')
 const index = require('./routes/index')
 const users = require('./routes/users')
 const article = require('./routes/article')
+const comment = require('./routes/comment')
 const koaBody = require('koa-body')
 // error handler
 onerror(app)
@@ -25,6 +26,7 @@ app.use(koaBody());
 app.use(index.routes()).use(index.allowedMethods());  
 app.use(users.routes()).use(users.allowedMethods()); 
 app.use(article.routes()).use(article.allowedMethods())
+app.use(comment.routes()).use(comment.allowedMethods())
 // error-handling
 app.on('error', (err, ctx) => {
   console.error('server error', err, ctx)
